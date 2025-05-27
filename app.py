@@ -13,7 +13,8 @@ from spreadsheet_manager import (
     get_special_list_from_sheet,
     search_battlelog_output_sheet,
     get_other_icon,
-    load_other_icon_cache
+    load_other_icon_cache,
+    refresh_output_sheet_cache  # ← 追加！
 )
 
 app = Flask(__name__)
@@ -89,6 +90,10 @@ def upload_confirm():
         ]
         row_data = [unicodedata.normalize("NFKC", v) for v in row_data]
         update_spreadsheet(row_data)
+
+        # ここで出力結果キャッシュも即時更新
+        refresh_output_sheet_cache()
+
         subprocess.run(
             [sys.executable, "call_gas.py"],
             check=True

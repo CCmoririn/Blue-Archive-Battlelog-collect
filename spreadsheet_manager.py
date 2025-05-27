@@ -1,6 +1,56 @@
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+import threading
+import time
+
+# ===== キャッシュ管理 =====
+_output_sheet_cache = {
+    "data_main": None,
+    "data_import": None,
+    "timestamp": 0
+}
+CACHE_LIFETIME = 60 * 60 * 24 * 365 * 10  # 実質無限に近く（強制更新だけ）
+
+def _fetch_output_sheet_records():
+    SPREADSHEET_ID = os.environ.get("OUTPUT_SHEET_ID")
+    if not SPREADSHEET_ID:
+        raise Exception("OUTPUT_SHEET_ID environment variable is not set.")
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds_path = os.environ.get("GOOGLE_APPLICATIONS_CREDENTIALS", os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+    if not creds_path:
+        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    worksheet_main = client.open_by_key(SPREADSHEET_ID).worksheet("出力結果")
+    worksheet_import = client.open_by_key(SPREADSHEET_ID).worksheet("一般版から転送")
+    all_records_main = get_sheet_records_with_empty_safe(worksheet_main, head_row=2)
+    all_records_import = get_sheet_records_with_empty_safe(worksheet_import, head_row=2)
+    return all_records_main, all_records_import
+
+def refresh_output_sheet_cache():
+    global _output_sheet_cache
+    print("出力結果シートのキャッシュを更新します...")
+    try:
+        main, imp = _fetch_output_sheet_records()
+        _output_sheet_cache = {
+            "data_main": main,
+            "data_import": imp,
+            "timestamp": time.time()
+        }
+        print(f"キャッシュ更新完了（限定:{len(main)}件／一般:{len(imp)}件）")
+    except Exception as e:
+        print(f"出力結果シートキャッシュの更新失敗: {e}")
+        # 失敗時は古いキャッシュで続行
+
+def get_output_sheet_cache():
+    global _output_sheet_cache
+    # 必要ならタイムスタンプで自動更新も可
+    if _output_sheet_cache["data_main"] is None or _output_sheet_cache["data_import"] is None:
+        refresh_output_sheet_cache()
+    return _output_sheet_cache
+
+# ========== アップロード時スプレッドシート追加 ==========
 
 def update_spreadsheet(data):
     """
@@ -121,22 +171,13 @@ def normalize(s):
     s = s.replace("（", "(").replace("）", ")").replace("(", "(").replace(")", ")")
     return s.strip()
 
-# ========== 部分一致仕様・全部空欄禁止の検索（限定/一般のsource属性付） ==========
+# ========== キャッシュ参照での検索 ==========
+
 def search_battlelog_output_sheet(query, search_side):
-    SPREADSHEET_ID = os.environ.get("OUTPUT_SHEET_ID")
-    if not SPREADSHEET_ID:
-        raise Exception("OUTPUT_SHEET_ID environment variable is not set.")
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_path = os.environ.get("GOOGLE_APPLICATIONS_CREDENTIALS", os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
-    if not creds_path:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    
-    worksheet_main = client.open_by_key(SPREADSHEET_ID).worksheet("出力結果")
-    worksheet_import = client.open_by_key(SPREADSHEET_ID).worksheet("一般版から転送")
-    all_records_main = get_sheet_records_with_empty_safe(worksheet_main, head_row=2)
-    all_records_import = get_sheet_records_with_empty_safe(worksheet_import, head_row=2)
+    # キャッシュ参照
+    cache = get_output_sheet_cache()
+    all_records_main = cache["data_main"] or []
+    all_records_import = cache["data_import"] or []
 
     if search_side == "attack":
         char_cols = ["A1", "A2", "A3", "A4", "ASP1", "ASP2"]
