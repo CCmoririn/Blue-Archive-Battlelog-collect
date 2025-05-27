@@ -1,55 +1,254 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>対抗戦ログアップロード</title>
+  <meta charset="UTF-8">
+  <title>BlueArchive対抗戦DB | トップページ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 読み込み（CDN） -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #e4f2fd 0%, #f7fafd 100%);
+      min-height: 100vh;
+      font-family: "Segoe UI", "ヒラギノ角ゴ ProN", "Meiryo", sans-serif;
+      margin: 0;
+      padding-top: 70px;
+    }
+    .navbar-custom {
+      position: fixed; top: 0; left: 0; width: 100%; z-index: 100;
+      background: #eb6b92; /* 濃い青に変更 */
+      box-shadow: 0 2px 10px #acd8fa20;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 34px 0 16px; min-height: 62px;
+    }
+    .logo-link { display: flex; align-items: center; height: 56px; text-decoration: none; }
+    .logo-text { font-size: 2.1em; font-weight: 800; color: #fff; letter-spacing: 0.06em; line-height: 1.05; user-select: none; transition: color .15s;}
+    .logo-link:hover .logo-text { color: #d73770; }
+    .nav-links { display: flex; gap: 18px;}
+    .nav-btn {
+      color: #fff;
+      background: transparent;
+      border: 2px solid #fff;
+      border-radius: 9px;
+      padding: 8px 28px;
+      font-size: 1.11em;
+      font-weight: bold;
+      text-decoration: none;
+      margin-left: 10px;
+      transition: background .16s, color .13s, border-color .16s;
+      box-shadow: 0 1px 6px #338eda10;
+    }
+    .nav-btn:hover {
+      background: #f170a7;
+      color: #fff;
+      border-color: #f170a7;
+    }
+    .hamburger { display: none; flex-direction: column; justify-content: center; align-items: center; width: 42px; height: 42px; background: none; border: none; cursor: pointer; margin-left: 18px; z-index: 120;}
+    .hamburger span { width: 28px; height: 4px; margin: 3px 0; background: #fff; border-radius: 2px; display: block; transition: all .2s;}
+    .sidebar-bg { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(30,60,90,0.18); z-index: 101;}
+    .sidebar { display: flex; flex-direction: column; position: fixed; top: 0; right: -270px; width: 270px; height: 100vh; background: #fff; box-shadow: -2px 0 22px #338eda1a; padding: 22px 24px 0 24px; z-index: 102; transition: right .23s cubic-bezier(.7,.1,.37,1.3);}
+    .sidebar.active { right: 0; }
+    .sidebar-link { color: #f170a7; text-decoration: none; font-size: 1.13em; padding: 16px 0; border-bottom: 1px solid #eef2f7; font-weight: bold; display: block; transition: color .13s;}
+    .sidebar-link:last-child { border-bottom: none; }
+    .sidebar-link:hover { color: #eb6b92; }
+    .close-btn { background: none; border: none; font-size: 2em; color: #888; position: absolute; top: 10px; right: 18px; cursor: pointer; }
+    @media (max-width: 900px) {
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+      .navbar-custom { padding: 0 11px 0 7px; }
+      .logo-text { font-size: 1.48em; }
+    }
+    /* --- タイトルパネル・トップページ装飾は前回と同じ --- */
+    .title-panel {
+      max-width: 540px;
+      margin: 32px auto 16px auto;
+      background: #fff;
+      border-radius: 24px;
+      box-shadow: 0 6px 32px #b0d6ee1c, 0 1px 0 #f8fbff;
+      padding: 32px 18px 18px 18px;
+    }
+    .main-title {
+      font-size: 2.3em;
+      font-weight: 900;
+      color: #338eda;
+      letter-spacing: 0.08em;
+      text-align: center;
+      text-shadow: 0 2px 10px #fff8, 0 1px 0 #c8e6fa;
+      margin: 0 0 6px 0;
+    }
+    .sub-title {
+      text-align: center;
+      color: #6ca0cb;
+      font-size: 1.08em;
+      margin-bottom: 0;
+    }
+    .btn-menu-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 36px;
+      justify-content: center;
+      margin: 38px 0 34px 0;
+    }
+    .menu-btn {
+      background: #fff;
+      color: #3397d8;
+      border: none;
+      border-radius: 18px;
+      padding: 20px 54px;
+      font-size: 1.20em;
+      font-weight: bold;
+      box-shadow: 0 2px 16px #93c8eb52, 0 1px 0 #f8fbff;
+      transition: background .16s, color .13s, box-shadow .18s;
+      min-width: 240px;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 3px solid #95d9fa;
+    }
+    .menu-btn:hover {
+      background: #95d9fa;
+      color: #22639b;
+      box-shadow: 0 3px 18px #7bc2edb0;
+      border-bottom: 3px solid #3397d8;
+    }
+    .panel-box {
+      background: #f8fcff;
+      border: 2.6px solid #3397d8;
+      border-radius: 16px;
+      margin: 26px auto 0 auto;
+      max-width: 700px;
+      box-shadow: 0 2px 18px #44a3eb18;
+      overflow: hidden;
+    }
+    .panel-title {
+      background: #3397d8;
+      color: #fff;
+      font-weight: bold;
+      font-size: 1.13em;
+      padding: 10px 22px 8px 22px;
+      letter-spacing: 0.04em;
+    }
+    .panel-body {
+      padding: 18px 24px 14px 24px;
+      font-size: 1.07em;
+      color: #22334a;
+    }
+    .news-scroll {
+      max-height: 110px;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 0 0 13px 13px;
+      border-top: 1.5px solid #e1ecfa;
+      padding: 9px 12px 8px 20px;
+      font-size: 1em;
+    }
+    .panel-body ul {
+      padding-left: 1.2em;
+      margin-bottom: 0;
+    }
+    .panel-body li {
+      margin-bottom: 0.38em;
+    }
+    .footer-custom {
+      background:rgba(250,250,250,0.94);
+      margin-top: 48px;
+      border-radius: 0 0 14px 14px;
+      text-align:center;
+      font-size:0.99em;
+      color:#444;
+      padding: 18px 4px 16px 4px;
+    }
+.limited-caption {
+  color: #eb6b92;
+  font-size: 1.15em;
+  font-weight: bold;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+  display: inline-block;
+}
+  </style>
 </head>
 <body>
-  <div class="background-overlay"></div> <!-- 背景を暗くするためのレイヤー -->
+  <!-- ▼▼ 共通ナビゲーション・ヘッダー・サイドバー ▼▼ -->
+  <header>
+    <nav class="navbar-custom">
+      <a href="/" class="logo-link">
+        <span class="logo-text">BlueArchive対抗戦DB</span>
+      </a>
+      <div class="nav-links">
+        <a href="/upload" class="nav-btn">アップロード</a>
+        <a href="/search" class="nav-btn">編成検索</a>
+      </div>
+      <button class="hamburger" id="hamburger-btn">
+        <span></span><span></span><span></span>
+      </button>
+    </nav>
+    <div class="sidebar-bg" id="sidebar-bg"></div>
+    <aside class="sidebar" id="sidebar">
+      <button class="close-btn" id="close-sidebar">&times;</button>
+      <a href="/upload" class="sidebar-link">アップロード</a>
+      <a href="/search" class="sidebar-link">編成検索</a>
+    </aside>
+  </header>
+  <!-- ▲▲ ヘッダー・サイドバーここまで ▲▲ -->
 
-  <div class="container py-5 text-white position-relative">
-    <h1 class="text-center mb-4">対抗戦ログアップロード</h1>
-    
-    <div class="card p-4 shadow-sm bg-light text-dark">
-      <form id="upload-form" method="post" enctype="multipart/form-data" action="/">
-        <div class="mb-3">
-          <label for="imageInput" class="form-label">画像を選択してください</label>
-          <input class="form-control" type="file" id="imageInput" name="image_file" accept="image/*" required>
-        </div>
-        <div class="text-center">
-          <button type="submit" class="btn btn-primary">アップロード</button>
-        </div>
-      </form>
-    </div>
-
-    <div id="preview-section" class="mt-4 d-none">
-      <h4>プレビュー</h4>
-      <img id="preview-image" class="img-fluid border" alt="選択された画像">
-    </div>
+  <main>
+    <div class="title-panel">
+  <div class="main-title">BlueArchive<b>対抗戦DB</b></div>
+  <div class="sub-title">ブルーアーカイブ戦術対抗戦の編成・結果データベース</div>
+  <div style="text-align:center; margin-top:6px;">
+    <span class="limited-caption">～さかな山脈限定版～</span>
   </div>
+</div>
 
-  <!-- フッター：連絡先とスプレッドシート -->
-  <footer class="text-center mt-5 text-white position-relative">
-    <small>
-      不具合などございましたら、
-      <a href="https://twitter.com/BestM_JP" target="_blank" class="text-info fw-bold">@BestM_JP</a>
-      までご連絡ください。<br>
-      アップロードされた戦闘ログの一覧は、
-      <a href="https://docs.google.com/spreadsheets/d/1IiQ3JQ70svrYoXKCQV89cNNQeSnwi2eW46AnY1gPoQ4/edit?gid=1420036762#gid=1420036762"
-         target="_blank" class="text-info fw-bold">
-        スプレッドシート
-      </a>からご確認いただけます。
-    </small>
+    <div class="btn-menu-wrap">
+      <a href="/upload" class="menu-btn">アップロード</a>
+      <a href="/search" class="menu-btn">編成検索</a>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title">お知らせ</div>
+      <div class="news-scroll">
+        <div>2025/06/01　新UI公開！</div>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title">このサイトについて</div>
+      <div class="panel-body">
+        <ul>
+          <li>対抗戦の戦闘ログ画像をアップロードして記録・蓄積</li>
+          <li>アップロードされたデータは自動で整理・分析されます</li>
+          <li>過去の編成や勝敗データをページ内で検索・閲覧できます</li>
+        </ul>
+        <div style="font-size:0.98em; color:#476998; margin-top:8px;">
+          ※アップロードされたデータは一般公開されます。個人情報等は含まれませんが、ご利用にはご配慮ください。
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer-custom">
+    ・運営/管理：作成者Twitter（<a href="https://twitter.com/BestM_JP" target="_blank" class="text-info fw-bold">@BestM_JP</a>）<br>
+    ・本サービスは個人による非公式ファンツールです
   </footer>
 
-  <!-- JavaScript 読み込み -->
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    // サイドバー動作
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarBg = document.getElementById('sidebar-bg');
+    const closeSidebarBtn = document.getElementById('close-sidebar');
+    hamburgerBtn.addEventListener('click', function () {
+      sidebar.classList.add('active');
+      sidebarBg.style.display = 'block';
+    });
+    closeSidebarBtn.addEventListener('click', closeSidebar);
+    sidebarBg.addEventListener('click', closeSidebar);
+    function closeSidebar() {
+      sidebar.classList.remove('active');
+      sidebarBg.style.display = 'none';
+    }
+  </script>
 </body>
 </html>
-
-
-

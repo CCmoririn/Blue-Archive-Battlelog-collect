@@ -22,6 +22,7 @@ __pycache__/
 
 # Google Cloud認証情報
 credentials.json
+shirasu_credentials.json
 
 # アップロードされたファイル
 uploads/
@@ -29,5 +30,3 @@ uploads/
 # Python 仮想環境フォルダを無視する
 venv/
 .venv/
-
-shirasu_credentials.json

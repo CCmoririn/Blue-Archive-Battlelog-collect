@@ -5,41 +5,113 @@
   <title>内容の確認・修正</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <style>
-    body { background: #f7f7f7; }
-    .edit-table { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-    .edit-table th, .edit-table td { padding: 8px 12px; vertical-align: middle; }
-    .desc-msg { color: #555; margin: 16px 0; text-align: center; }
-    .edit-table input { width: 100%; }
-    .edit-btn { min-width: 180px; }
+    body {
+      background: linear-gradient(135deg, #e4f2fd 0%, #f7fafd 100%);
+      min-height: 100vh;
+      font-family: "Segoe UI", "ヒラギノ角ゴ ProN", "Meiryo", sans-serif;
+      margin: 0;
+      padding-top: 70px;
+    }
+    .main-card {
+      max-width: 700px;
+      margin: 44px auto 32px auto;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(80,150,230,0.09);
+      padding: 38px 26px 28px 26px;
+    }
+    .edit-title {
+      font-size: 2.0em;
+      font-weight: 900;
+      color: #338eda;
+      letter-spacing: 0.06em;
+      text-align: center;
+      margin-bottom: 18px;
+      text-shadow: 0 1px 8px #fafd, 0 1px 0 #c8e6fa;
+    }
+    .desc-msg {
+      color: #5580a5;
+      font-size: 1.08em;
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .edit-table {
+      width: 100%;
+      margin: 0 auto 22px auto;
+      background: none;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+    .edit-table th {
+      width: 33%;
+      background: none;
+      color: #338eda;
+      font-weight: bold;
+      vertical-align: middle;
+      font-size: 1.05em;
+      border: none;
+      padding: 9px 10px 9px 0;
+    }
+    .edit-table td {
+      background: none;
+      border: none;
+      padding: 7px 0 7px 0;
+    }
+    .edit-table input {
+      width: 100%;
+      background: #f6fbff;
+      border-radius: 8px;
+      border: 1.2px solid #ddeafd;
+      font-size: 1.08em;
+      padding: 7px 10px;
+      box-shadow: 0 1px 4px #338eda14;
+    }
+    .edit-btn {
+      background: linear-gradient(90deg, #5ad5e9, #3c8fd8 90%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 46px;
+      font-size: 1.18em;
+      font-weight: bold;
+      box-shadow: 0 2px 12px #83cbf822;
+      transition: background .16s;
+      min-width: 180px;
+    }
+    .edit-btn:hover {
+      background: #3499e5;
+    }
+    @media (max-width: 800px) {
+      .main-card { max-width: 99vw; padding: 18px 2vw 14px 2vw;}
+      .edit-title { font-size: 1.28em; }
+      .edit-table th { font-size: 0.99em; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="edit-table p-4">
-      <h2 class="mb-3 text-center">内容の確認・修正</h2>
-      <div class="desc-msg">
-        ※キャラ名の細かな表記や多少の誤字は（ほぼ）自動で修正されます。<br>
-        明らかに違う部分だけ、ご自身で修正していただければ大丈夫です。
-      </div>
-      <form method="post" action="/confirm">
-        <table class="table table-borderless">
-          <tbody>
-            {% for label in labels %}
-            <tr>
-              <th style="width:30%;">{{ label }}</th>
-              <td><input type="text" name="field{{ loop.index0 }}" value="{{ row_data[loop.index0] }}" class="form-control"></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <div class="text-center mt-4">
-          <button type="submit" class="btn btn-success btn-lg edit-btn">この内容で確定</button>
-        </div>
-      </form>
+  <div class="main-card">
+    <div class="edit-title">内容の確認・修正</div>
+    <div class="desc-msg">
+      ※キャラ名の細かな表記や多少の誤字は（ほぼ）自動で修正されます。<br>
+      明らかに違う部分だけ、ご自身で修正していただければ大丈夫です。
     </div>
+    <form method="post" action="/upload/confirm">
+      <table class="table table-borderless edit-table">
+        <tbody>
+          {% for label in labels %}
+          <tr>
+            <th>{{ label }}</th>
+            <td><input type="text" name="field{{ loop.index0 }}" value="{{ row_data[loop.index0] }}" class="form-control"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="text-center mt-4">
+        <button type="submit" class="edit-btn">この内容で確定</button>
+      </div>
+    </form>
   </div>
 </body>
 </html>
-

@@ -22,3 +22,24 @@ document.getElementById("imageInput").addEventListener("change", function () {
   };
   reader.readAsDataURL(file);
 });
+
+
+
+// --- 共通ナビ用JS（script.jsに追加） ---
+const hamburger = document.getElementById('hamburger-btn');
+const sidebar = document.getElementById('sidebar');
+const sidebarBg = document.getElementById('sidebar-bg');
+const closeSidebar = document.getElementById('close-sidebar');
+
+hamburger.addEventListener('click', () => {
+  sidebar.classList.add('active');
+  sidebarBg.style.display = 'block';
+});
+sidebarBg.addEventListener('click', () => {
+  sidebar.classList.remove('active');
+  sidebarBg.style.display = 'none';
+});
+closeSidebar.addEventListener('click', () => {
+  sidebar.classList.remove('active');
+  sidebarBg.style.display = 'none';
+});
