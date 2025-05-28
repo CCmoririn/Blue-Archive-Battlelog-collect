@@ -6,7 +6,7 @@ import sys
 import unicodedata
 import subprocess
 from flask import Flask, request, render_template, jsonify, redirect, url_for
-from main import process_image, call_apps_script
+# from main import process_image, call_apps_script ← ここはコメントアウト！
 from spreadsheet_manager import (
     update_spreadsheet,
     get_striker_list_from_sheet,
@@ -14,7 +14,7 @@ from spreadsheet_manager import (
     search_battlelog_output_sheet,
     get_other_icon,
     load_other_icon_cache,
-    refresh_output_sheet_cache  # ← 追加！
+    refresh_output_sheet_cache
 )
 
 app = Flask(__name__)
@@ -59,6 +59,7 @@ def upload():
     file_path = os.path.join(uploads_dir, file.filename)
     file.save(file_path)
     try:
+        from main import process_image  # ← 関数内でimport
         row_data = process_image(file_path)
         labels = [
             "日付", "攻撃側プレイヤー", "攻撃結果",
@@ -84,6 +85,7 @@ def upload():
 @app.route("/upload/confirm", methods=["POST"])
 def upload_confirm():
     try:
+        from main import call_apps_script  # ← 関数内でimport
         row_data = [
             request.form.get(f"field{i}", "")
             for i in range(18)
@@ -91,13 +93,13 @@ def upload_confirm():
         row_data = [unicodedata.normalize("NFKC", v) for v in row_data]
         update_spreadsheet(row_data)
 
-        # ここで出力結果キャッシュも即時更新
-        refresh_output_sheet_cache()
-
+        # しらす式変換 → 完了してからキャッシュ更新！
         subprocess.run(
             [sys.executable, "call_gas.py"],
             check=True
         )
+        refresh_output_sheet_cache()  # ← 順番をここに
+
         return redirect(url_for("upload_complete"))
     except subprocess.CalledProcessError as e:
         print(f"しらす式変換エラー: {e}")

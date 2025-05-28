@@ -4,7 +4,25 @@ from google.oauth2.service_account import Credentials
 import threading
 import time
 
-# ===== キャッシュ管理 =====
+# ========== アップロード時スプレッドシート追加 ==========
+def update_spreadsheet(data):
+    """
+    スプレッドシートに認識結果を記録（常に3行目に追加）
+    """
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not creds_path:
+        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    SPREADSHEET_ID = os.environ.get("BATTLELOG_SHEET_ID")
+    if not SPREADSHEET_ID:
+        raise Exception("BATTLELOG_SHEET_ID environment variable is not set.")
+    worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("戦闘ログ")
+    worksheet.insert_row(data, 3)
+    print("スプレッドシートを更新しました:", data)
+
+# ===== キャッシュ管理（出力結果） =====
 _output_sheet_cache = {
     "data_main": None,
     "data_import": None,
@@ -50,64 +68,102 @@ def get_output_sheet_cache():
         refresh_output_sheet_cache()
     return _output_sheet_cache
 
-# ========== アップロード時スプレッドシート追加 ==========
+# ========== キャラデータ（STRIKER/SPECIAL）6時間キャッシュ ==========
+_CHAR_CACHE_LIFETIME = 6 * 60 * 60  # 6時間（秒）
 
-def update_spreadsheet(data):
-    """
-    スプレッドシートに認識結果を記録（常に3行目に追加）
-    """
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    SPREADSHEET_ID = os.environ.get("BATTLELOG_SHEET_ID")
-    if not SPREADSHEET_ID:
-        raise Exception("BATTLELOG_SHEET_ID environment variable is not set.")
-    worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("戦闘ログ")
-    worksheet.insert_row(data, 3)
-    print("スプレッドシートを更新しました:", data)
+_striker_cache = {
+    "data": None,
+    "timestamp": 0
+}
+_special_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
+def _update_striker_cache():
+    global _striker_cache
+    try:
+        print("STRIKERキャッシュを更新します...")
+        SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path:
+            raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        client = gspread.authorize(creds)
+        SPREADSHEET_ID = os.environ.get("CHARDATA_SHEET_ID")
+        if not SPREADSHEET_ID:
+            raise Exception("CHARDATA_SHEET_ID environment variable is not set.")
+        worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("STRIKER")
+        records = worksheet.get_all_records()
+        char_list = []
+        for row in records:
+            name = row.get("キャラ名")
+            icon_url = row.get("アイコン")
+            if name and icon_url:
+                char_list.append({"name": name, "image": icon_url})
+        _striker_cache = {
+            "data": char_list,
+            "timestamp": time.time()
+        }
+        print(f"STRIKERキャッシュ更新完了（{len(char_list)}件）")
+    except Exception as e:
+        print(f"STRIKERキャッシュ更新失敗: {e}")
+
+def _update_special_cache():
+    global _special_cache
+    try:
+        print("SPECIALキャッシュを更新します...")
+        SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path:
+            raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        client = gspread.authorize(creds)
+        SPREADSHEET_ID = os.environ.get("CHARDATA_SHEET_ID")
+        if not SPREADSHEET_ID:
+            raise Exception("CHARDATA_SHEET_ID environment variable is not set.")
+        worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("SPECIAL")
+        records = worksheet.get_all_records()
+        char_list = []
+        for row in records:
+            name = row.get("キャラ名")
+            icon_url = row.get("アイコン")
+            if name and icon_url:
+                char_list.append({"name": name, "image": icon_url})
+        _special_cache = {
+            "data": char_list,
+            "timestamp": time.time()
+        }
+        print(f"SPECIALキャッシュ更新完了（{len(char_list)}件）")
+    except Exception as e:
+        print(f"SPECIALキャッシュ更新失敗: {e}")
 
 def get_striker_list_from_sheet():
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    SPREADSHEET_ID = os.environ.get("CHARDATA_SHEET_ID")
-    if not SPREADSHEET_ID:
-        raise Exception("CHARDATA_SHEET_ID environment variable is not set.")
-    worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("STRIKER")
-    records = worksheet.get_all_records()
-    char_list = []
-    for row in records:
-        name = row.get("キャラ名")
-        icon_url = row.get("アイコン")
-        if name and icon_url:
-            char_list.append({"name": name, "image": icon_url})
-    return char_list
+    global _striker_cache
+    now = time.time()
+    if (_striker_cache["data"] is None) or (now - _striker_cache["timestamp"] > _CHAR_CACHE_LIFETIME):
+        _update_striker_cache()
+    return _striker_cache["data"] or []
 
 def get_special_list_from_sheet():
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    SPREADSHEET_ID = os.environ.get("CHARDATA_SHEET_ID")
-    if not SPREADSHEET_ID:
-        raise Exception("CHARDATA_SHEET_ID environment variable is not set.")
-    worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("SPECIAL")
-    records = worksheet.get_all_records()
-    char_list = []
-    for row in records:
-        name = row.get("キャラ名")
-        icon_url = row.get("アイコン")
-        if name and icon_url:
-            char_list.append({"name": name, "image": icon_url})
-    return char_list
+    global _special_cache
+    now = time.time()
+    if (_special_cache["data"] is None) or (now - _special_cache["timestamp"] > _CHAR_CACHE_LIFETIME):
+        _update_special_cache()
+    return _special_cache["data"] or []
+
+# サーバー起動時に初回キャッシュ取得
+_update_striker_cache()
+_update_special_cache()
+
+# バックグラウンドで6時間ごとに自動更新
+def char_cache_scheduler():
+    while True:
+        time.sleep(_CHAR_CACHE_LIFETIME)
+        _update_striker_cache()
+        _update_special_cache()
+
+threading.Thread(target=char_cache_scheduler, daemon=True).start()
 
 # ========== その他アイコンのキャッシュ ==========
 _OTHER_ICON_SPREADSHEET_ID = os.environ.get("CHARDATA_SHEET_ID")
