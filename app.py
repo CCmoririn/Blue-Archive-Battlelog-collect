@@ -6,7 +6,7 @@ import sys
 import unicodedata
 import subprocess
 from flask import Flask, request, render_template, jsonify, redirect, url_for
-# from main import process_image, call_apps_script ← ここはコメントアウト！
+
 from spreadsheet_manager import (
     update_spreadsheet,
     get_striker_list_from_sheet,
@@ -14,23 +14,18 @@ from spreadsheet_manager import (
     search_battlelog_output_sheet,
     get_other_icon,
     load_other_icon_cache,
-    refresh_output_sheet_cache
+    append_battlelog_row_from_api,
+    fetch_latest_output_row_as_dict  # 追加
 )
 
 app = Flask(__name__)
 
-# --- credentials.json方式に統一 ---
 if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
     print("GOOGLE_APPLICATION_CREDENTIALS not found in environment variables.")
 
-# キャッシュ初期化
 load_other_icon_cache()
 
 def normalize_sp_chars(chars: list, side: str) -> list:
-    """
-    6キャラのうち、SP枠（攻撃側は5,6番目/防衛側は5,6番目）を順不同一致に変換して返す
-    例: ['A1','A2','A3','A4','ASP1','ASP2'] → ['A1','A2','A3','A4', min(ASP1,ASP2), max(ASP1,ASP2)]
-    """
     if not chars or len(chars) != 6:
         return chars
     main = chars[:4]
@@ -38,7 +33,6 @@ def normalize_sp_chars(chars: list, side: str) -> list:
     return main + sp
 
 def match_team(query, target, side):
-    """SP枠のみ順不同で一致判定"""
     return normalize_sp_chars(query, side) == normalize_sp_chars(target, side)
 
 # ========== トップページ ==========
@@ -59,7 +53,7 @@ def upload():
     file_path = os.path.join(uploads_dir, file.filename)
     file.save(file_path)
     try:
-        from main import process_image  # ← 関数内でimport
+        from main import process_image
         row_data = process_image(file_path)
         labels = [
             "日付", "攻撃側プレイヤー", "攻撃結果",
@@ -85,7 +79,7 @@ def upload():
 @app.route("/upload/confirm", methods=["POST"])
 def upload_confirm():
     try:
-        from main import call_apps_script  # ← 関数内でimport
+        from main import call_apps_script
         row_data = [
             request.form.get(f"field{i}", "")
             for i in range(18)
@@ -93,12 +87,19 @@ def upload_confirm():
         row_data = [unicodedata.normalize("NFKC", v) for v in row_data]
         update_spreadsheet(row_data)
 
-        # しらす式変換 → 完了してからキャッシュ更新！
+        # しらす式変換 → 完了してからキャッシュappend！
         subprocess.run(
             [sys.executable, "call_gas.py"],
             check=True
         )
-        refresh_output_sheet_cache()  # ← 順番をここに
+
+        # ▼▼ 出力結果3行目をdict化してappend ▼▼
+        latest_row = fetch_latest_output_row_as_dict()
+        if latest_row:
+            append_battlelog_row_from_api(latest_row, source="限定")
+        else:
+            print("出力結果3行目の取得に失敗しました。")
+        # ▲▲
 
         return redirect(url_for("upload_complete"))
     except subprocess.CalledProcessError as e:
@@ -113,6 +114,24 @@ def upload_confirm():
             "complete.html",
             message=f"スプレッドシートの更新に失敗しました: {e}"
         )
+
+# ========== 限定サーバーAPI：一般サーバーからのデータ受信 ==========
+@app.route("/api/add_battlelog", methods=["POST"])
+def api_add_battlelog():
+    """
+    一般サーバーからデータ受信 → append_battlelog_row_from_api()でキャッシュ追加
+    """
+    try:
+        row_dict = request.json
+        if not row_dict:
+            return jsonify({"result": "error", "detail": "No data received"}), 400
+        source = row_dict.get("source", "一般")
+        append_battlelog_row_from_api(row_dict, source=source)
+        print(f"API経由でデータ受信・追加完了: {row_dict}")
+        return jsonify({"result": "ok"})
+    except Exception as e:
+        print(f"API追加エラー: {e}")
+        return jsonify({"result": "error", "detail": str(e)}), 500
 
 # ========== アップロード完了 ==========
 @app.route("/upload/complete", methods=["GET"])
@@ -144,7 +163,7 @@ def api_search():
             return jsonify({"error": "No data received"}), 400
         side = data.get("side")
         characters = data.get("characters")
-        only_limited = data.get("only_limited", False)  # 限定だけ検索
+        only_limited = data.get("only_limited", False)
         if side not in ["attack", "defense"] or not isinstance(characters, list) or len(characters) != 6:
             return jsonify({"error": "Invalid parameters"}), 400
         if not any(characters):
@@ -152,7 +171,6 @@ def api_search():
 
         matched_rows = search_battlelog_output_sheet(characters, side)
 
-        # ▼▼▼ ここで日付で降順（新しい順）に並べ替え
         def parse_date(row):
             try:
                 return datetime.strptime(row.get("日付", ""), "%Y-%m-%d %H:%M:%S")
@@ -160,7 +178,6 @@ def api_search():
                 return datetime.min
 
         matched_rows = sorted(matched_rows, key=parse_date, reverse=True)
-        # ▲▲▲ ここまで
 
         response = []
         win_icon = get_other_icon("勝ち")
@@ -169,7 +186,6 @@ def api_search():
         defense_icon = get_other_icon("防衛側")
 
         for row in matched_rows:
-            # 「限定のみ」指定がONなら、限定source以外はスキップ
             if only_limited and row.get("source") != "限定":
                 continue
 

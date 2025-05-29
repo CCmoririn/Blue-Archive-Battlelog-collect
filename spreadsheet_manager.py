@@ -25,7 +25,6 @@ def update_spreadsheet(data):
 # ===== キャッシュ管理（出力結果） =====
 _output_sheet_cache = {
     "data_main": None,
-    "data_import": None,
     "timestamp": 0
 }
 CACHE_LIFETIME = 60 * 60 * 24 * 365 * 10  # 実質無限に近く（強制更新だけ）
@@ -40,33 +39,94 @@ def _fetch_output_sheet_records():
         raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
     creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     client = gspread.authorize(creds)
-    worksheet_main = client.open_by_key(SPREADSHEET_ID).worksheet("出力結果")
-    worksheet_import = client.open_by_key(SPREADSHEET_ID).worksheet("一般版から転送")
-    all_records_main = get_sheet_records_with_empty_safe(worksheet_main, head_row=2)
-    all_records_import = get_sheet_records_with_empty_safe(worksheet_import, head_row=2)
-    return all_records_main, all_records_import
+
+    # 限定データ（"出力結果"）
+    worksheet_limited = client.open_by_key(SPREADSHEET_ID).worksheet("出力結果")
+    records_limited = get_sheet_records_with_empty_safe(worksheet_limited, head_row=2)
+    for row in records_limited:
+        row["source"] = "限定"
+
+    # 一般データ（"一般版から転送" シート名は環境によって変更してね）
+    try:
+        worksheet_general = client.open_by_key(SPREADSHEET_ID).worksheet("一般版から転送")
+        records_general = get_sheet_records_with_empty_safe(worksheet_general, head_row=2)
+        for row in records_general:
+            row["source"] = "一般"
+    except Exception as e:
+        print(f"「一般版から転送」シート取得失敗: {e}")
+        records_general = []
+
+    # 先に限定、後に一般
+    return records_limited + records_general
 
 def refresh_output_sheet_cache():
     global _output_sheet_cache
     print("出力結果シートのキャッシュを更新します...")
     try:
-        main, imp = _fetch_output_sheet_records()
+        main = _fetch_output_sheet_records()
         _output_sheet_cache = {
             "data_main": main,
-            "data_import": imp,
             "timestamp": time.time()
         }
-        print(f"キャッシュ更新完了（限定:{len(main)}件／一般:{len(imp)}件）")
+        print(f"キャッシュ更新完了（{len(main)}件）")
     except Exception as e:
         print(f"出力結果シートキャッシュの更新失敗: {e}")
-        # 失敗時は古いキャッシュで続行
 
 def get_output_sheet_cache():
     global _output_sheet_cache
-    # 必要ならタイムスタンプで自動更新も可
-    if _output_sheet_cache["data_main"] is None or _output_sheet_cache["data_import"] is None:
+    if _output_sheet_cache["data_main"] is None:
         refresh_output_sheet_cache()
     return _output_sheet_cache
+
+def append_battlelog_row_from_api(row_dict, source="一般"):
+    """
+    API経由またはしらす式変換後に受信した「出力結果」形式データをキャッシュに追加
+    """
+    global _output_sheet_cache
+    if _output_sheet_cache["data_main"] is None:
+        refresh_output_sheet_cache()
+    row_dict["source"] = source
+    _output_sheet_cache["data_main"].insert(0, row_dict)
+    print(f"API経由で{source}データをキャッシュに追加: {row_dict}")
+
+def fetch_latest_output_row_as_dict():
+    """
+    出力結果シートの3行目（最新追加行）をdictで返す
+    重複ヘッダーもユニーク化して区別できるようにする
+    """
+    try:
+        SPREADSHEET_ID = os.environ.get("OUTPUT_SHEET_ID")
+        if not SPREADSHEET_ID:
+            raise Exception("OUTPUT_SHEET_ID environment variable is not set.")
+        SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds_path = os.environ.get("GOOGLE_APPLICATIONS_CREDENTIALS", os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+        if not creds_path:
+            raise Exception("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        client = gspread.authorize(creds)
+        worksheet = client.open_by_key(SPREADSHEET_ID).worksheet("出力結果")
+        headers = worksheet.row_values(2)    # 2行目がヘッダー
+        latest_row = worksheet.row_values(3) # 3行目が最新データ
+
+        # --- 重複カラム名も区別してdict化する ---
+        seen = {}
+        uniq_headers = []
+        for h in headers:
+            base = h.strip() if h.strip() else "空欄"
+            count = seen.get(base, 0)
+            if count > 0:
+                uniq_headers.append(f"{base}_{count+1}")
+            else:
+                uniq_headers.append(base)
+            seen[base] = count + 1
+
+        row_dict = {}
+        for i, key in enumerate(uniq_headers):
+            row_dict[key] = latest_row[i] if i < len(latest_row) else ""
+        return row_dict
+    except Exception as e:
+        print(f"出力結果シート最新行取得失敗: {e}")
+        return None
 
 # ========== キャラデータ（STRIKER/SPECIAL）6時間キャッシュ ==========
 _CHAR_CACHE_LIFETIME = 6 * 60 * 60  # 6時間（秒）
@@ -228,12 +288,9 @@ def normalize(s):
     return s.strip()
 
 # ========== キャッシュ参照での検索 ==========
-
 def search_battlelog_output_sheet(query, search_side):
-    # キャッシュ参照
     cache = get_output_sheet_cache()
     all_records_main = cache["data_main"] or []
-    all_records_import = cache["data_import"] or []
 
     if search_side == "attack":
         char_cols = ["A1", "A2", "A3", "A4", "ASP1", "ASP2"]
@@ -241,15 +298,11 @@ def search_battlelog_output_sheet(query, search_side):
         char_cols = ["D1", "D2", "D3", "D4", "DSP1", "DSP2"]
 
     query_norm = [normalize(x) for x in query]
-
-    # 全部空欄の場合は空リスト返す
     if not any(query_norm):
         print("全枠空欄のため検索しません")
         return []
 
     result = []
-
-    # --- 限定データ ---
     for row in all_records_main:
         match = True
         for i in range(4):
@@ -263,27 +316,5 @@ def search_battlelog_output_sheet(query, search_side):
         data_sp = set([normalize(row.get(char_cols[4], "")), normalize(row.get(char_cols[5], ""))])
         if query_sp and not query_sp.issubset(data_sp):
             continue
-        # ここでsource属性を付加
-        row_with_source = dict(row)
-        row_with_source["source"] = "限定"
-        result.append(row_with_source)
-
-    # --- 一般データ ---
-    for row in all_records_import:
-        match = True
-        for i in range(4):
-            if query_norm[i]:
-                if normalize(row.get(char_cols[i], "")) != query_norm[i]:
-                    match = False
-                    break
-        if not match:
-            continue
-        query_sp = set([q for q in query_norm[4:6] if q])
-        data_sp = set([normalize(row.get(char_cols[4], "")), normalize(row.get(char_cols[5], ""))])
-        if query_sp and not query_sp.issubset(data_sp):
-            continue
-        row_with_source = dict(row)
-        row_with_source["source"] = "一般"
-        result.append(row_with_source)
-
+        result.append(row)
     return result
