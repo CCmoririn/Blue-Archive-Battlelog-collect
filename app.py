@@ -87,19 +87,16 @@ def upload_confirm():
         row_data = [unicodedata.normalize("NFKC", v) for v in row_data]
         update_spreadsheet(row_data)
 
-        # しらす式変換 → 完了してからキャッシュappend！
         subprocess.run(
             [sys.executable, "call_gas.py"],
             check=True
         )
 
-        # ▼▼ 出力結果3行目をdict化してappend ▼▼
         latest_row = fetch_latest_output_row_as_dict()
         if latest_row:
             append_battlelog_row_from_api(latest_row, source="限定")
         else:
             print("出力結果3行目の取得に失敗しました。")
-        # ▲▲
 
         return redirect(url_for("upload_complete"))
     except subprocess.CalledProcessError as e:
@@ -118,9 +115,6 @@ def upload_confirm():
 # ========== 限定サーバーAPI：一般サーバーからのデータ受信 ==========
 @app.route("/api/add_battlelog", methods=["POST"])
 def api_add_battlelog():
-    """
-    一般サーバーからデータ受信 → append_battlelog_row_from_api()でキャッシュ追加
-    """
     try:
         row_dict = request.json
         if not row_dict:
@@ -141,8 +135,8 @@ def upload_complete():
         message="アップロードが完了しました"
     )
 
-# ========== 編成検索ページ ==========
-@app.route("/search")
+# ========== 編成検索ページ・検索実行 ==========
+@app.route("/search", methods=["GET"])
 def search():
     try:
         striker_list = get_striker_list_from_sheet()
@@ -151,8 +145,124 @@ def search():
         print(f"キャラリスト取得エラー: {e}")
         striker_list = []
         special_list = []
-    return render_template("db.html", striker_list=striker_list, special_list=special_list)
 
+    # 検索パラメータ取得
+    side = request.args.get("side", "attack")
+    c1 = request.args.get("c1", "")
+    c2 = request.args.get("c2", "")
+    c3 = request.args.get("c3", "")
+    c4 = request.args.get("c4", "")
+    c5 = request.args.get("c5", "")
+    c6 = request.args.get("c6", "")
+    only_limited = request.args.get("only_limited", "false") == "true"
+
+    show_results = any([c1, c2, c3, c4, c5, c6])
+
+    results = []
+    if show_results:
+        # API経由せずサーバーサイドでそのまま取得して渡す
+        try:
+            matched_rows = search_battlelog_output_sheet(
+                [c1, c2, c3, c4, c5, c6], side
+            )
+
+            from datetime import datetime
+
+            def parse_date(row):
+                try:
+                    return datetime.strptime(row.get("日付", ""), "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return datetime.min
+
+            matched_rows = sorted(matched_rows, key=parse_date, reverse=True)
+
+            win_icon = get_other_icon("勝ち")
+            lose_icon = get_other_icon("負け")
+            attack_icon = get_other_icon("攻撃側")
+            defense_icon = get_other_icon("防衛側")
+
+            for row in matched_rows:
+                if only_limited and row.get("source") != "限定":
+                    continue
+
+                if side == "attack":
+                    if row.get("勝敗_2", "") != "Win":
+                        continue
+                    results.append({
+                        "source": row.get("source", ""),
+                        "winner_type": "defense",
+                        "winner_icon": defense_icon,
+                        "winner_winlose_icon": win_icon,
+                        "winner_player": row.get("プレイヤー名_2", ""),
+                        "winner_characters": [
+                            row.get("D1", ""),
+                            row.get("D2", ""),
+                            row.get("D3", ""),
+                            row.get("D4", ""),
+                            row.get("DSP1", ""),
+                            row.get("DSP2", ""),
+                        ],
+                        "loser_type": "attack",
+                        "loser_icon": attack_icon,
+                        "loser_winlose_icon": lose_icon,
+                        "loser_player": row.get("プレイヤー名", ""),
+                        "loser_characters": [
+                            row.get("A1", ""),
+                            row.get("A2", ""),
+                            row.get("A3", ""),
+                            row.get("A4", ""),
+                            row.get("ASP1", ""),
+                            row.get("ASP2", ""),
+                        ],
+                        "date": row.get("日付", ""),
+                    })
+                else:
+                    if row.get("勝敗", "") != "Win":
+                        continue
+                    results.append({
+                        "source": row.get("source", ""),
+                        "winner_type": "attack",
+                        "winner_icon": attack_icon,
+                        "winner_winlose_icon": win_icon,
+                        "winner_player": row.get("プレイヤー名", ""),
+                        "winner_characters": [
+                            row.get("A1", ""),
+                            row.get("A2", ""),
+                            row.get("A3", ""),
+                            row.get("A4", ""),
+                            row.get("ASP1", ""),
+                            row.get("ASP2", ""),
+                        ],
+                        "loser_type": "defense",
+                        "loser_icon": defense_icon,
+                        "loser_winlose_icon": lose_icon,
+                        "loser_player": row.get("プレイヤー名_2", ""),
+                        "loser_characters": [
+                            row.get("D1", ""),
+                            row.get("D2", ""),
+                            row.get("D3", ""),
+                            row.get("D4", ""),
+                            row.get("DSP1", ""),
+                            row.get("DSP2", ""),
+                        ],
+                        "date": row.get("日付", ""),
+                    })
+        except Exception as e:
+            print(f"限定版検索エラー: {e}")
+            results = []
+
+    return render_template(
+        "db.html",
+        striker_list=striker_list,
+        special_list=special_list,
+        results=results,
+        show_results=show_results,
+        side=side,
+        c1=c1, c2=c2, c3=c3, c4=c4, c5=c5, c6=c6,
+        only_limited=only_limited,
+    )
+
+# ========== 検索API（限定版からも将来呼ばれる場合のみ） ==========
 @app.route("/api/search", methods=["POST"])
 def api_search():
     try:
