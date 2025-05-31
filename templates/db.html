@@ -12,7 +12,8 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/plugins/Swap/Sortable.swap.min.js"></script>
   <style>
-    body { background: linear-gradient(135deg, #e4f2fd 0%, #f7fafd 100%); min-height: 100vh; font-family: "Segoe UI", "ヒラギノ角ゴ ProN", "Meiryo", sans-serif; margin:0; }
+    /* ...ここはご主人の現状のCSSそのまま... */
+     body { background: linear-gradient(135deg, #e4f2fd 0%, #f7fafd 100%); min-height: 100vh; font-family: "Segoe UI", "ヒラギノ角ゴ ProN", "Meiryo", sans-serif; margin:0; }
     .navbar-custom {
       position: fixed;
       top: 0;
@@ -235,7 +236,7 @@
     .side-col.left-col .side-icons-wrap, .side-col.right-col .side-icons-wrap { margin-right: 18px;}
     .side-icon, .winlose-icon {
       border: 2px solid #f7a7be;
-      background: #fae1e9;
+      background: #none;
       border-radius: 7px;
       padding: 1px 4px;
       box-shadow: 0 1px 4px #f7a7be44;
@@ -291,6 +292,9 @@
       background: #fff;
       transition: all .2s;
     }
+.result-row.limited-border .vs-mark {
+  background: linear-gradient(90deg,#fffbe2 90%,#fff8ca 100%) !important;
+}
     .left-bottom, .vs-dummy, .result-date {
       height: 27px;
       line-height: 27px;
@@ -407,7 +411,9 @@
       <!-- 限定データだけ検索 チェックボックス -->
       <div style="margin:12px 0 3px 0; display:flex; align-items:center;">
         <label style="font-size:1.02em;user-select:none;">
-          <input type="checkbox" id="limitedOnlyCheckbox" style="transform:scale(1.18);margin-right:6px;vertical-align:-2px;">
+          <input type="checkbox" id="limitedOnlyCheckbox" name="only_limited" value="1"
+            {% if request.args.get('only_limited') in ['1', 'true', 'on'] %}checked{% endif %}
+            style="transform:scale(1.18);margin-right:6px;vertical-align:-2px;">
           限定データだけ検索
         </label>
       </div>
@@ -415,7 +421,6 @@
     </form>
   </div>
 </div>
-
 {% if show_results %}
   <div class="search-results-section" id="searchResultsSection">
     <div class="search-result-title">検索結果一覧</div>
@@ -488,6 +493,12 @@ function initFromParams() {
     let found = pool.find(c => c.name === name);
     defenseTeam[idx] = found || null;
   });
+  // チェックボックスの初期値も復元
+  const limitedOnlyParam = params.get("only_limited");
+  const limitedCheckbox = document.getElementById("limitedOnlyCheckbox");
+  if (limitedCheckbox) {
+    limitedCheckbox.checked = (limitedOnlyParam === "1" || limitedOnlyParam === "true" || limitedOnlyParam === "on");
+  }
 }
 
 function renderDefenseRow() {
@@ -572,6 +583,7 @@ document.getElementById("searchForm").onsubmit = function(e) {
     document.getElementById("c" + (i+1)).value = defenseTeam[i] ? defenseTeam[i].name : "";
   }
   document.getElementById("sideInput").value = (atkOrDef === "攻撃" ? "attack" : "defense");
+  // チェックボックス状態をGET送信（name属性で自動送信）
   // →そのままGET送信
 };
 
@@ -664,8 +676,12 @@ async function doSearchFromParams() {
   for (let i = 1; i <= 6; i++) {
     charNames.push(getParam("c" + i) || "");
   }
-  // 限定データだけ検索チェックボックス
-  const onlyLimited = document.getElementById("limitedOnlyCheckbox")?.checked || false;
+  // GETパラメータから限定のみフラグを取得
+  const onlyLimited = (
+    getParam("only_limited") === "1" ||
+    getParam("only_limited") === "true" ||
+    getParam("only_limited") === "on"
+  );
   if (charNames.filter(x => !!x).length === 0) {
     document.getElementById("searchResults").innerHTML = "<div style='color:#888;font-size:1.08em;padding:28px 0;'>該当データが存在しません</div>";
     return;
