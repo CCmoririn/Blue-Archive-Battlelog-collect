@@ -7,6 +7,7 @@ import subprocess
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
 from spreadsheet_manager import update_spreadsheet
+from config import CURRENT_SEASON  # ← season対応
 
 # 日本時間 (JST) 定義
 JST = datetime.timezone(datetime.timedelta(hours=9))
@@ -140,7 +141,7 @@ def ocr_region(image, region):
     os.remove(tmp)
     return clean_text(text)
 
-def process_image(image_path):
+def process_image(image_path, season=None):
     """
     画像を受け取って以下を実行し、row_dataを返す。
       1. 前処理＋マスク
@@ -197,6 +198,7 @@ def process_image(image_path):
 def call_apps_script():
     """
     Apps Script 呼び出し。サービスアカウント認証で token を取得し POST。
+    GASエンドポイントURLは環境変数「GAS_SCRIPT_URL」から取得
     """
     cred_cont = os.environ.get("credentials")
     if not cred_cont:
@@ -211,7 +213,9 @@ def call_apps_script():
         creds.refresh(Request())
     token = creds.token
 
-    url = 'https://script.google.com/macros/s/AKfycby6jamSogeLKTtla3A90hnweRLyRc-E3XryNXeA07nVsJAQy2Dj1pRNfce6WaSm2dwb/exec'
+    url = os.environ.get("GAS_SCRIPT_URL")  # ← 環境変数から取得
+    if not url:
+        raise Exception("GAS_SCRIPT_URL environment variable is not set.")
     payload = {'function': 'main'}
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
 
@@ -229,10 +233,10 @@ def main():
         print("Usage: python main.py <image_path>")
         sys.exit(1)
     path = sys.argv[1]
-    row = process_image(path)
+    row = process_image(path, season=CURRENT_SEASON)  # ← シーズンも必ず指定
 
     # スプレッドシート更新
-    update_spreadsheet(row)
+    update_spreadsheet(row, season=CURRENT_SEASON)
     print("スプレッドシートを更新しました:", row)
 
     # しらす式変換
@@ -241,4 +245,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

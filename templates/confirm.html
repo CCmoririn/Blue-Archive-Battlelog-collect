@@ -2,10 +2,31 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7051331824444850"
+  <script async src="https://pagead2.google.com/pagead/js/adsbygoogle.js?client=ca-pub-7051331824444850"
      crossorigin="anonymous"></script>
   <title>内容の確認・修正</title>
-  <meta name="robots" content="noindex, nofollow">
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+<meta name="google-site-verification" content="4GMC-Y_YcFE5giRV5RQjmObgAuhmClSSKmrSs333ZFY" />
+<meta name="google-site-verification" content="5jdGgzQ9EcR6LwSRfCz2ONeqcsCQ9Cvhrw0Wylp1DcA" />
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-64P3RM78K2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-64P3RM78K2');
+</script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js?client=ca-pub-7051331824444850"
+     crossorigin="anonymous"></script>
+  <title>BlueArchive対抗戦DB | トップページ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ブルーアーカイブ（ブルアカ）戦術対抗戦の編成・勝敗データベース。編成ログの検索・アップロードが可能。ユーザー協力型のファンツールです。">
+  <meta name="keywords" content="ブルーアーカイブ,ブルアカ,対抗戦,編成,DB,検索,勝敗,データベース,アップロード">
+  <!-- OGP -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -32,12 +53,6 @@
       text-align: center;
       margin-bottom: 18px;
       text-shadow: 0 1px 8px #fafd, 0 1px 0 #c8e6fa;
-    }
-    .desc-msg {
-      color: #5580a5;
-      font-size: 1.08em;
-      text-align: center;
-      margin-bottom: 26px;
     }
     .edit-table {
       width: 100%;
@@ -82,18 +97,45 @@
       box-shadow: 0 2px 12px #83cbf822;
       transition: background .16s;
       min-width: 180px;
-      display: block;
-      margin: 0 auto;
-      text-align: center;
     }
     .edit-btn:hover {
       background: #3499e5;
+    }
+    /* --- 画像プレビュー用 --- */
+    .preview-box {
+      text-align: center;
+      margin: 32px auto 8px auto;
+    }
+    .preview-box img {
+      max-width: 98%;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(80,150,230,0.10);
+      margin-bottom: 8px;
+    }
+    .preview-caption {
+      font-size: 0.98em;
+      color: #557;
+      margin-bottom: 2px;
+    }
+    /* --- info-panel案内枠 --- */
+    .info-panel {
+      background: #f7fcff;
+      border: 2px solid #bfe2ff;
+      border-radius: 15px;
+      box-shadow: 0 2px 12px #d7ebfa36;
+      max-width: 650px;
+      margin: 34px auto 0 auto;
+      padding: 22px 18px 15px 18px;
+      font-size: 1.07em;
+      color: #236396;
+      text-align: left;
     }
     @media (max-width: 800px) {
       .main-card { max-width: 99vw; padding: 18px 2vw 14px 2vw;}
       .edit-title { font-size: 1.28em; }
       .edit-table th { font-size: 0.99em; }
-      .edit-btn { width: 98vw; max-width: 380px; min-width: 0; font-size: 1.06em; }
+      .info-panel { max-width: 99vw; padding: 14px 3vw 12px 3vw;}
+      .preview-box img { max-width: 100%; }
     }
     /* ▼ ローディングモーダル部品追加 */
     #loading-modal {
@@ -157,15 +199,20 @@
       100% { stroke-dasharray: 90,150; stroke-dashoffset: -124;}
     }
     /* ▲ ローディングモーダル部品追加ここまで */
+    .footer-custom {
+      background:rgba(250,250,250,0.94);
+      margin-top: 38px;
+      border-radius: 0 0 14px 14px;
+      text-align:center;
+      font-size:0.99em;
+      color:#444;
+      padding: 18px 4px 16px 4px;
+    }
   </style>
 </head>
 <body>
   <div class="main-card">
     <div class="edit-title">内容の確認・修正</div>
-    <div class="desc-msg">
-      ※キャラ名の細かな表記や多少の誤字は（ほぼ）自動で修正されます。<br>
-      明らかに違う部分だけ、ご自身で修正していただければ大丈夫です。
-    </div>
     <form id="confirm-form" method="post" action="/upload/confirm">
       <table class="table table-borderless edit-table">
         <tbody>
@@ -181,6 +228,22 @@
         <button type="submit" class="edit-btn">この内容で確定</button>
       </div>
     </form>
+
+    <!-- ▼ プレビュー画像ここに追加！ ▼ -->
+    {% if preview_image_url %}
+    <div class="preview-box">
+      <img src="{{ preview_image_url }}" alt="アップロード画像プレビュー">
+      <div class="preview-caption">※ アップロード画像のプレビュー</div>
+    </div>
+    {% endif %}
+    <!-- ▲ ここまで ▲ -->
+
+  </div>
+
+  <!-- ▼ info-panel（案内枠・フッターの上） ▼ -->
+  <div class="info-panel">
+    内容をご確認の上、誤りがあれば修正してください。キャラ名の表記ゆれや細かな誤字は自動で補正されますので、明らかな間違いのみ修正してください。<br>
+    「この内容で確定」ボタンを押すと、データベースに内容がアップロードされます。
   </div>
 
   <!-- ▼ ローディングモーダル：マテリアルデザイン風 ▼ -->
@@ -196,6 +259,13 @@
     </div>
   </div>
   <!-- ▲ ローディングモーダルここまで ▲ -->
+
+  <!-- ▼ 共通フッター ▼ -->
+<footer class="footer-custom">
+  ・運営/管理：作成者Twitter（<a href="https://twitter.com/BestM_JP" target="_blank" class="text-info fw-bold">@BestM_JP</a>）<br>
+  ・本サービスは個人による非公式ファンツールです<br>
+  ・<a href="/privacy.html" class="text-info fw-bold" style="text-decoration:underline;">プライバシーポリシー</a>
+</footer>
 
   <script>
     // ローディング表示制御
