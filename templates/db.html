@@ -288,26 +288,30 @@
   </style>
 </head>
 <body>
-<header>
-  <nav class="navbar-custom">
-    <a href="/" class="logo-link">
-      <span class="logo-text">BlueArchive対抗戦DB</span>
-    </a>
-    <div class="nav-links">
-      <a href="/upload" class="nav-btn">アップロード</a>
-      <a href="/search" class="nav-btn">編成検索</a>
-    </div>
-    <button class="hamburger" id="hamburger-btn">
-      <span></span><span></span><span></span>
-    </button>
-  </nav>
-  <div class="sidebar-bg" id="sidebar-bg"></div>
-  <aside class="sidebar" id="sidebar">
-    <button class="close-btn" id="close-sidebar">&times;</button>
-    <a href="/upload" class="sidebar-link">アップロード</a>
-    <a href="/search" class="sidebar-link">編成検索</a>
-  </aside>
-</header>
+  <!-- ▼▼ 共通ナビゲーション・ヘッダー・サイドバー ▼▼ -->
+  <header>
+    <nav class="navbar-custom">
+      <a href="/" class="logo-link">
+        <span class="logo-text">BlueArchive対抗戦DB</span>
+      </a>
+      <div class="nav-links">
+        <a href="/upload" class="nav-btn">アップロード</a>
+        <a href="/search" class="nav-btn">編成検索</a>
+        <a href="/defense_suggest" class="nav-btn">防衛メーカー</a>
+      </div>
+      <button class="hamburger" id="hamburger-btn">
+        <span></span><span></span><span></span>
+      </button>
+    </nav>
+    <div class="sidebar-bg" id="sidebar-bg"></div>
+    <aside class="sidebar" id="sidebar">
+      <button class="close-btn" id="close-sidebar">&times;</button>
+      <a href="/upload" class="sidebar-link">アップロード</a>
+      <a href="/search" class="sidebar-link">編成検索</a>
+      <a href="/defense_suggest" class="sidebar-link">防衛編成メーカー</a>
+    </aside>
+  </header>
+  <!-- ▲▲ ヘッダー・サイドバーここまで ▲▲ -->
 
 {% set show_results = request.args.get('side') is not none %}
 
@@ -589,7 +593,11 @@ function renderCharList() {
   }
   const filterText = kataToHira(filter);
   candidates
-    .filter(c => !defenseTeam.includes(c) || (selectedChar && selectedChar.name === c.name))
+    .filter(c => {
+      // 現在選択中のキャラは除外せずに候補に出す（自分のスロットだけ除外）
+      if (selectedChar && selectedChar.name === c.name) return true;
+      return !defenseTeam.some((ch, idx) => ch && ch.name === c.name && idx !== currSlot);
+    })
     .filter(c => kataToHira(c.name).includes(filterText))
     .forEach(c => {
       const div = document.createElement("div");
@@ -610,6 +618,7 @@ function renderCharList() {
       grid.appendChild(div);
     });
 }
+
 document.getElementById("modalSearch").oninput = renderCharList;
 document.getElementById("modalOk").onclick = () => {
   defenseTeam[currSlot] = selectedChar;

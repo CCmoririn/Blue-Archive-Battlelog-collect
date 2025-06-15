@@ -3,10 +3,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 import threading
 import time
+import json
 
 from config import CURRENT_SEASON, SEASON_LIST, CACHE_DIR
-
-import json
 
 # ========== アップロード時スプレッドシート追加 ==========
 
@@ -72,7 +71,6 @@ def refresh_output_sheet_cache(season=None):
     # 一般DBの「転送」シートID（＝同じファイル内 or 環境変数で取得可）
     GENERAL_TRANSFER_SHEET_ID = os.environ.get("GENERAL_TRANSFER_SHEET_ID") \
         or LIMITED_OUTPUT_SHEET_ID  # デフォは同一ファイル
-    # シート名は「一般版から転送」固定
 
     # 1. 限定データ
     limited_sheet_name = f"出力結果_{season_key}"
@@ -93,7 +91,6 @@ def refresh_output_sheet_cache(season=None):
 
     # 3. 日付順に結合（新しい順）へ
     def parse_datetime(row):
-        # 「日付」カラムをdatetimeでソート。フォーマット例: "2025-06-10 22:21:42"
         import datetime
         v = row.get("日付", "")
         try:
@@ -116,9 +113,6 @@ def get_output_sheet_cache(season=None):
     return data
 
 def fetch_latest_output_row_as_dict(season=None):
-    """
-    限定データの3行目を返す（API/アップロード補助用。source付与はなし）
-    """
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if not creds_path:
@@ -151,9 +145,6 @@ def fetch_latest_output_row_as_dict(season=None):
     return row_dict
 
 def append_battlelog_row_from_api(row_dict, season=None, source="一般"):
-    """
-    API経由追加用（source付きでキャッシュに追加）
-    """
     season_key = season or CURRENT_SEASON
     data = get_output_sheet_cache(season_key)
     row_dict["source"] = source
@@ -193,8 +184,27 @@ def _update_striker_cache():
         for row in records:
             name = row.get("キャラ名")
             icon_url = row.get("アイコン")
+            try:
+                # 射程は整数型に変換。異常値はスキップ
+                s_range = int(row.get("射程", 0) or 0)
+                if s_range not in (350, 450, 550, 650, 750, 850):
+                    raise ValueError
+            except Exception:
+                print(f"[STRIKER] キャラ「{name}」の射程データ異常、スキップ")
+                continue
+            shield_raw = row.get("遮蔽", "")
+            # TRUE/FALSE（str, boolどちらでも対応）に変換
+            if isinstance(shield_raw, bool):
+                shield = shield_raw
+            else:
+                shield = str(shield_raw).strip().upper() == "TRUE"
             if name and icon_url:
-                char_list.append({"name": name, "image": icon_url})
+                char_list.append({
+                    "name": name,
+                    "image": icon_url,
+                    "射程": s_range,
+                    "遮蔽": shield,
+                })
         _striker_cache = {
             "data": char_list,
             "timestamp": time.time()
@@ -325,9 +335,6 @@ def normalize(s):
 # ========== キャッシュ参照での検索 ==========
 
 def search_battlelog_output_sheet(query, search_side, season=None, only_limited=False):
-    """
-    限定＋一般両方のキャッシュをsourceでフィルタ
-    """
     cache = get_output_sheet_cache(season)
     all_records_main = cache or []
 
@@ -366,9 +373,6 @@ def search_battlelog_output_sheet(query, search_side, season=None, only_limited=
 # =========================
 
 def get_latest_loser_teams(n=5, season=None, only_limited=False):
-    """
-    最新n件の負け側チームを返す（限定だけ検索可）
-    """
     striker_list = get_striker_list_from_sheet()
     special_list = get_special_list_from_sheet()
     char_image_map = {c["name"]: c["image"] for c in striker_list + special_list}

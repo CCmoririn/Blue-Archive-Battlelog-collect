@@ -17,9 +17,11 @@ from spreadsheet_manager import (
     load_other_icon_cache,
     append_battlelog_row_from_api,
     fetch_latest_output_row_as_dict,
-    get_latest_loser_teams  # ★新規追加
+    get_latest_loser_teams
 )
 from config import CURRENT_SEASON, SEASON_LIST
+
+from defense_suggester import suggest_defense_teams, suggest_team_for_template
 
 app = Flask(__name__)
 
@@ -40,7 +42,6 @@ def match_team(query, target, side):
 
 @app.route("/", methods=["GET"])
 def index():
-    # 直近アップロード（負け側5件）も渡す
     loser_teams = get_latest_loser_teams(5)
     return render_template(
         "index.html",
@@ -49,7 +50,6 @@ def index():
         loser_teams=loser_teams
     )
 
-# ▼ 画像アップロードファイルを返すエンドポイント
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     uploads_dir = os.path.abspath("uploads")
@@ -68,7 +68,6 @@ def upload():
     file.save(file_path)
     try:
         from main import process_image
-        # シーズン名はクエリまたはフォームから取得（なければ現行シーズン）
         season = request.form.get("season", CURRENT_SEASON)
         row_data = process_image(file_path, season=season)
         labels = [
@@ -79,7 +78,6 @@ def upload():
             "防衛キャラ1", "防衛キャラ2", "防衛キャラ3",
             "防衛キャラ4", "防衛キャラ5", "防衛キャラ6"
         ]
-        # プレビュー用のURLをテンプレートに渡す
         preview_image_url = f"/uploads/{file.filename}"
         return render_template(
             "confirm.html",
@@ -133,7 +131,6 @@ def upload_confirm():
             message=f"スプレッドシートの更新に失敗しました: {e}"
         )
 
-# 限定サーバーAPI：一般サーバーからのデータ受信
 @app.route("/api/add_battlelog", methods=["POST"])
 def api_add_battlelog():
     try:
@@ -281,7 +278,76 @@ def api_search():
         print(f"/api/search エラー: {e}")
         return jsonify({"error": str(e)}), 500
 
-# ▼▼▼ privacy.htmlを表示するルート
+# ▼▼▼ 防衛提案ページ（POSTで攻撃編成も保持→再描画）
+@app.route("/defense_suggest", methods=["GET", "POST"])
+def defense_suggest():
+    """
+    限定サーバー専用の「攻め編成群に強い防衛を提案」機能ページ
+    - GET：フォームを表示
+    - POST：攻め編成群を受けて提案結果を返す＋攻撃欄を保持
+    """
+    message = None
+    result = None
+    season = request.form.get("season", CURRENT_SEASON)
+    striker_list = get_striker_list_from_sheet()
+    special_list = get_special_list_from_sheet()
+    # 攻撃欄の保持用配列（2次元配列）
+    attack_teams = [[None for _ in range(6)] for _ in range(5)]
+    strict_pos = bool(request.form.get("strict_pos")) if request.method == "POST" else False
+    if request.method == "POST":
+        try:
+            attacks = []
+            for i in range(5):
+                chars = []
+                for j in range(6):
+                    char_name = request.form.get(f"attack_{i}_{j}", "").strip()
+                    chars.append(char_name)
+                if any(chars):
+                    attacks.append(chars)
+                # --- 攻撃欄の保持用にこのまま全部残す ---
+                attack_teams[i] = [
+                    next((c for c in striker_list if c["name"] == chars[j]), None) if j < 4 else
+                    next((c for c in special_list if c["name"] == chars[j]), None)
+                    if chars[j] else None
+                    for j in range(6)
+                ]
+            if not attacks:
+                attacks = [["", "", "", "", "", ""]]
+            result = suggest_defense_teams(attacks, season=season, strict_pos=strict_pos)
+        except Exception as e:
+            message = f"提案ロジック実行時にエラーが発生しました: {e}"
+    else:
+        # GET時：空欄状態で表示
+        attack_teams = [[None for _ in range(6)] for _ in range(5)]
+    return render_template(
+        "defense_suggest.html",
+        striker_list=striker_list,
+        special_list=special_list,
+        SEASON_LIST=SEASON_LIST,
+        CURRENT_SEASON=season,
+        message=message,
+        result=result,
+        strict_pos=strict_pos,
+        attack_teams=attack_teams
+    )
+
+# ▼▼▼ テンプレ決定過程テーブル用API
+@app.route("/api/template_detail", methods=["POST"])
+def api_template_detail():
+    try:
+        data = request.json
+        template_tags = data.get("template_tags")
+        attacks = data.get("attacks")
+        season = data.get("season", CURRENT_SEASON)
+        strict_pos = bool(data.get("strict_pos"))
+        if not attacks or not any(any(x) for x in attacks):
+            attacks = [["", "", "", "", "", ""]]
+        res = suggest_team_for_template(template_tags, attacks=attacks, season=season, strict_pos=strict_pos)
+        return jsonify(res)
+    except Exception as e:
+        print(f"/api/template_detail エラー: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/privacy.html")
 def privacy():
     return render_template("privacy.html")
